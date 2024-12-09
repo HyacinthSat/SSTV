@@ -20,4 +20,4 @@
 
 ## 许可
 
-本项目采用GPLv3许可证。
+本项目采用GNU General Public License v3.0许可证。
