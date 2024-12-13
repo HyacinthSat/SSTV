@@ -16,16 +16,15 @@ License: GNU General Public License v3.0
 
 #define STB_IMAGE_IMPLEMENTATION          // stb预处理器
 #define STB_IMAGE_RESIZE_IMPLEMENTATION   // stb预处理器 
-#define SAMPLE_RATE 11025                 // 采样率
+#define SAMPLE_RATE 8000                  // 采样率
 #define PI 3.14159265358979323846         // 圆周率
-#define COLOR_FREQ_MULT 3.1372549         // 颜色频率乘数，用于转换RGB值到频率(0-255映射到1500-2300)
+#define COLOR_FREQ_MULT 3.1372549         // 颜色频率乘数，用于转换RGB值到频率(0-255映射到1500~2300)
 
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include <windows.h>
 #include "include\stb_image.h"
 
 // 声明全局变量
@@ -92,9 +91,8 @@ void write_tone(double frequency, double duration_ms, double phi) {
     total_samples += num_samples;
 	olderdata = sin((2 * PI * frequency * num_samples + phi_samples) / SAMPLE_RATE);
     oldercos = cos((2 * PI * frequency * num_samples + phi_samples) / SAMPLE_RATE);
-    //printf("%lf\n",phi_samples);
-    //printf("%lf\n",olderdata);
 }
+
 // 函数：判断正负号
 int sign(double num) {
 
@@ -106,6 +104,7 @@ int sign(double num) {
         return 0;
     }
 }
+
 // 函数：调制 VIS 校准头
 void generate_vis(const char *vis_code) {
     
@@ -148,8 +147,28 @@ double rgb_read_pixel(const char *color, int x, int y) {
     } else if (strcmp(color, "b") == 0) {
         return (double)pixels[index + 2];
     } else {
-        fprintf(stderr, "无效的颜色参数: %s\n", color);
-        return -1.0; // 错误返回值
+        double R = (double)pixels[index];
+        double G = (double)pixels[index + 1];
+        double B = (double)pixels[index + 2];
+
+        if (strcmp(color, "y") == 0) {
+            return 16.0 + (.003906 * ((65.738 * R) + (129.057 * G) + (25.064 * B)));
+        } else if (strcmp(color, "ry") == 0) {
+            return 128.0 + (.003906 * ((112.439 * R) + (-94.154 * G) + (-18.285 * B)));
+        } else if (strcmp(color, "by") == 0) {
+            return 128.0 + (.003906 * ((-37.945 * R) + (-74.494 * G) + (112.439 * B)));
+        }
+    }
+}
+
+// 函数：调制结束音
+void generate_end() {
+    
+    struct { double frequency; int duration_ms; } tones[] = {
+        {1500, 500},{1900, 100},{1500, 100},{1900, 100},{1500, 100}
+    };
+    for (int i = 0; i < 5; i++) {
+        write_tone(tones[i].frequency, tones[i].duration_ms, 0);
     }
 }
 
@@ -167,7 +186,6 @@ void generate_scottie_dx() {
         // 绿色扫描
         for(int x = 0; x < 320; x++) {
             write_tone(1500 + rgb_read_pixel("g",x,line)*COLOR_FREQ_MULT, 1.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
-            //printf("Green freq: %lf\n", 1500 + rgb_read_pixel("g",x,line)*COLOR_FREQ_MULT);
         }
 
         // 分离脉冲
@@ -176,7 +194,6 @@ void generate_scottie_dx() {
         // 蓝色扫描
         for(int x = 0; x < 320; x++) {
             write_tone(1500 + rgb_read_pixel("b",x,line)*COLOR_FREQ_MULT, 1.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
-            //printf("Blue freq: %lf\n", 1500 + rgb_read_pixel("b",x,line)*COLOR_FREQ_MULT);
         }
 
         // 同步脉冲与同步沿
@@ -186,7 +203,45 @@ void generate_scottie_dx() {
         // 红色扫描
         for(int x = 0; x < 320; x++) {
             write_tone(1500 + rgb_read_pixel("r",x,line)*COLOR_FREQ_MULT, 1.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
-            //printf("Red freq: %lf\n", 1500 + rgb_read_pixel("r",x,line)*COLOR_FREQ_MULT);
+        }
+    }
+}
+
+// 函数：调制 PD-120 图像
+void generate_pd_120() {
+
+    for (int line = 0; line < 496; line++) {
+
+        // PD 模式一次扫描两行，由偶数行开始
+        if (line % 2 == 0) {
+
+            printf("Line %d\n", line);
+
+            // 长同步脉冲
+            write_tone(1200, 20, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+
+            // Porch 脉冲
+            write_tone(1500, 2.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+
+            // 偶数行亮度扫描
+            for(int x = 0; x < 640; x++) {
+                write_tone(1500 + rgb_read_pixel("y",x,line)*COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            }
+
+            // 两行RY均值扫描
+            for(int x = 0; x < 640; x++) {
+                write_tone(1500 + (rgb_read_pixel("ry",x,line) + rgb_read_pixel("ry",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            }
+
+            // 两行BY均值扫描
+            for(int x = 0; x < 640; x++) {
+                write_tone(1500 + (rgb_read_pixel("by",x,line) + rgb_read_pixel("by",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            }
+
+            // 奇数行亮度扫描
+            for(int x = 0; x < 640; x++) {
+                write_tone(1500 + rgb_read_pixel("y",x,line+1)*COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            }
         }
     }
 }
@@ -195,15 +250,20 @@ void generate_scottie_dx() {
 int generate(const char *wav_filename, const char *model) {
     
     // 文件写入初始化
-    total_samples = 0;    // 重置样本计数
+    total_samples = 0;// 重置样本计数
     file = fopen(wav_filename, "wb");
     if (!file) { perror("无法打开文件"); return 1; }
-    write_wav_header(0);    // 写入空的 WAV 头
+    write_wav_header(0);// 写入空的 WAV 头
 
     // 按模式选择 VIS 码，调制图像内容
     if (strcmp(model, "Scottie-DX") == 0){
         generate_vis("1001100");
         generate_scottie_dx();
+        generate_end();
+    } else if (strcmp(model, "PD-120") == 0){
+        generate_vis("1011111");
+        generate_pd_120();
+        generate_end();
     }
 
     // 计算数据大小并写入文件头
@@ -219,12 +279,11 @@ int main(int argc, char *argv[]) {
     const char *model;
     image_filename = argv[1];
     model = argv[2];
-    SetConsoleOutputCP(65001);
 
     // 命令行提示
     if (argc != 3) {
         printf("用法: .\\sstv.exe <image_filename> <SSTV model>\n");
-        printf("支持的SSTV模式: Scottie-DX\n");
+        printf("支持的SSTV模式:\n1.Scottie-DX\n2.PD-120\n");
         return 1;
     }
 
@@ -232,7 +291,7 @@ int main(int argc, char *argv[]) {
     pixels = stbi_load(image_filename, &width, &height, &channels, 3);
     if (!pixels) {
         fprintf(stderr, "无法加载图像文件。\n");
-        return 1;
+        return -1;
     }
 
     // 处理 WAV 文件名
@@ -281,8 +340,6 @@ VIS 代码结束后，不管是什么 SSTV 模式，其信号都应紧跟着开�
 
 各个调制模式的VIS编码：
 
-Scottie 1:   0111100 (60 d)
-Scottie 2:   0111000 (56 d)
 Scottie DX:  1001100 (76 d)
-
+PD-120:      1011111 (95 d)
 */
