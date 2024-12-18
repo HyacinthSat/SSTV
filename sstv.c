@@ -16,7 +16,7 @@ License: GNU General Public License v3.0
 
 #define STB_IMAGE_IMPLEMENTATION          // stb预处理器
 #define STB_IMAGE_RESIZE_IMPLEMENTATION   // stb预处理器 
-#define SAMPLE_RATE 8000                  // 采样率
+#define SAMPLE_RATE 6000                  // 采样率
 #define PI 3.14159265358979323846         // 圆周率
 #define COLOR_FREQ_MULT 3.1372549         // 颜色频率乘数，用于转换RGB值到频率(0-255映射到1500~2300)
 
@@ -25,7 +25,7 @@ License: GNU General Public License v3.0
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-#include "include\stb_image.h"
+#include "include/stb_image.h"
 
 // 声明全局变量
 FILE *file;                   // 用于存储音频数据的文件指针
@@ -157,7 +157,11 @@ double rgb_read_pixel(const char *color, int x, int y) {
             return 128.0 + (.003906 * ((112.439 * R) + (-94.154 * G) + (-18.285 * B)));
         } else if (strcmp(color, "by") == 0) {
             return 128.0 + (.003906 * ((-37.945 * R) + (-74.494 * G) + (112.439 * B)));
-        }
+        } else {
+	    printf("错误的颜色通道，请检查代码\n");
+	    exit(-1);
+	    return -1;
+	}
     }
 }
 
@@ -264,6 +268,9 @@ int generate(const char *wav_filename, const char *model) {
         generate_vis("1011111");
         generate_pd_120();
         generate_end();
+    } else {
+	printf("错误的调制模式\n");
+	exit(-1);
     }
 
     // 计算数据大小并写入文件头
