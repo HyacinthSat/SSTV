@@ -11,13 +11,16 @@
 2. Robot-36
 3. Robot-72
 
-## 使用
-
+## 编译
+```
+~ $ gcc sstv.c -o sstv -lm -I./include
+```
+## 运行
 使用命令行参数指定输入文件和调制模式，例如：  
 ```
 ./sstv test.png Scottie-DX
 ```
 
-## 许可
+## 许可证
 
 本项目采用GNU General Public License v3.0许可证。
