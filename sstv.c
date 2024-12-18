@@ -310,7 +310,7 @@ int main(int argc, char *argv[]) {
 
     // 释放图像内存
     stbi_image_free((unsigned char*)pixels);
-    printf("End.");
+    printf("End.\n");
     return result;
 }
 
