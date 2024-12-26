@@ -3,7 +3,7 @@
 This C program is used to modulate SSTV audio.
 It will be used for amateur radio activities with the XuanJing series satellites.
 
-Version: 1.0   Date: December 9, 2024
+Version: 1.0   Date: December 26, 2024
 
 Developer & Acknowledgments:
     BG7ZDQ - Initial program
@@ -24,6 +24,7 @@ License: GNU General Public License v3.0
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 #include <string.h>
 #include "include/stb_image.h"
 
@@ -74,28 +75,8 @@ void write_wav_header(uint32_t data_size) {
     fwrite(&header, sizeof(WAVHeader), 1, file);
 }
 
-// 函数：生成并写入指定频率和持续时间和初始相位的正弦波音频
-void write_tone(double frequency, double duration_ms, double phi) {
-    uint32_t num_samples = SAMPLE_RATE * duration_ms / 1000;
-    delta_lenth += SAMPLE_RATE * duration_ms / 1000 - num_samples;
-    if (delta_lenth >= 1) {
-        num_samples += (int)delta_lenth;
-        delta_lenth -= (int)delta_lenth;
-    }
-    double phi_samples = SAMPLE_RATE * phi;
-    short buffer[num_samples];
-    for (uint32_t i = 0; i < num_samples; ++i) {
-        buffer[i] = (short)(32767 * sin((2 * PI * frequency * i + phi_samples) / SAMPLE_RATE));
-    }
-    fwrite(buffer, sizeof(short), num_samples, file);
-    total_samples += num_samples;
-	olderdata = sin((2 * PI * frequency * num_samples + phi_samples) / SAMPLE_RATE);
-    oldercos = cos((2 * PI * frequency * num_samples + phi_samples) / SAMPLE_RATE);
-}
-
 // 函数：判断正负号
 int sign(double num) {
-
     if (num >= 0) {
         return 1;
     } else if (num < 0) {
@@ -105,35 +86,23 @@ int sign(double num) {
     }
 }
 
-// 函数：调制 VIS 校准头
-void generate_vis(const char *vis_code) {
-    
-    // 快速识别前导 + VIS 码引导音与起始音部分
-    struct { double frequency; int duration_ms; } tones[] = {
-        {1900, 100},{1500, 100},{1900, 100},{1500, 100},{2300, 100},{1500, 100},{2300, 100},{1500, 100},{1900, 300}, {1200, 10}, {1900, 300}, {1200, 30}
-    };
-    for (int i = 0; i < 12; i++) {
-        write_tone(tones[i].frequency, tones[i].duration_ms, 0);
+// 函数：生成并写入指定频率和持续时间和初始相位的正弦波音频
+void write_tone(double frequency, double duration_ms) {
+    uint32_t num_samples = SAMPLE_RATE * duration_ms / 1000;
+    delta_lenth += SAMPLE_RATE * duration_ms / 1000 - num_samples;
+    if (delta_lenth >= 1) {
+        num_samples += (int)delta_lenth;
+        delta_lenth -= (int)delta_lenth;
     }
-
-    // VIS 码 7 位标识数据位部分，注意 VIS 码为小端序
-    for (int i = 0; i < 7; i++) {
-        double frequency = vis_code[6-i] == '1' ? 1100 : 1300;
-        write_tone(frequency, 30, 0);
+    double phi_samples = SAMPLE_RATE * (sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+    short buffer[num_samples];
+    for (uint32_t i = 0; i < num_samples; ++i) {
+        buffer[i] = (short)(32767 * sin((2 * PI * frequency * i + phi_samples) / SAMPLE_RATE));
     }
-
-    // 偶校验位部分
-    int parity = 0;
-    for (int i = 0; i < 7; i++) {
-        if (vis_code[i] == '1') {
-            parity++;
-        }
-    }
-    int parity_bit = (parity % 2 == 0) ? 0 : 1;
-    write_tone((parity_bit == 0) ? 1300 : 1100, 30, 0);
-
-    // 结束位
-    write_tone(1200, 30, 0);
+    fwrite(buffer, sizeof(short), num_samples, file);
+    total_samples += num_samples;
+    olderdata = sin((2 * PI * frequency * num_samples + phi_samples) / SAMPLE_RATE);
+    oldercos = cos((2 * PI * frequency * num_samples + phi_samples) / SAMPLE_RATE);
 }
 
 // 函数：计算像素在某一颜色通道的强度
@@ -158,11 +127,63 @@ double rgb_read_pixel(const char *color, int x, int y) {
         } else if (strcmp(color, "by") == 0) {
             return 128.0 + (.003906 * ((-37.945 * R) + (-74.494 * G) + (112.439 * B)));
         } else {
-	    printf("错误的颜色通道，请检查代码\n");
-	    exit(-1);
-	    return -1;
-	}
+	        printf("错误的颜色通道，请检查代码\n");
+	        exit(-1);
+	        return -1;
+	    }
     }
+}
+
+// 函数：调制 VIS 校准头
+void generate_vis(const char *vis_code) {
+    
+    // CW 呼号 + 快速识别前导 + VIS 码引导音与起始音部分
+    struct { double frequency; int duration_ms; } tones[] = {
+
+        // 'D' -> -..
+        {1900, 150}, {0, 50}, {1900, 50}, {0, 50}, {1900, 50}, {0, 150},
+        // 'E' -> .
+        {1900, 50}, {0, 350},
+        // 'B' -> -...
+        {1900, 150}, {0, 50}, {1900, 50}, {0, 50}, {1900, 50}, {0, 50}, {1900, 50}, {0, 150},
+        // 'G' -> --.
+        {1900, 150}, {0, 50}, {1900, 150}, {0, 50}, {1900, 50}, {0, 150},
+        // '7' -> --...
+        {1900, 150}, {0, 50}, {1900, 150}, {0, 50}, {1900, 50}, {0, 50}, {1900, 50}, {0, 50}, {1900, 50}, {0, 150},
+        // 'Z' -> --..
+        {1900, 150}, {0, 50}, {1900, 150}, {0, 50}, {1900, 50}, {0, 50}, {1900, 50}, {0, 150},
+        // 'D' -> -..
+        {1900, 150}, {0, 50}, {1900, 50}, {0, 50}, {1900, 50}, {0, 150},
+        // 'Q' -> --.-
+        {1900, 150}, {0, 50}, {1900, 150}, {0, 50}, {1900, 50}, {0, 50}, {1900, 150}, {0, 350},
+        // 前导音
+        {1900, 100},{1500, 100},{1900, 100},{1500, 100},{2300, 100},{1500, 100},{2300, 100},{1500, 100},
+        // VIS 码引导音
+        {1900, 300}, {1200, 10}, {1900, 300}, {1200, 30}
+
+    };
+    for (int i = 0; i < 66; i++) {
+        write_tone(tones[i].frequency, tones[i].duration_ms);
+    }
+
+    // VIS 码 7 位标识数据位部分，注意 VIS 码为小端序
+    for (int i = 0; i < 7; i++) {
+        double frequency = vis_code[6-i] == '1' ? 1100 : 1300;
+        write_tone(frequency, 30);
+    }
+
+    // 偶校验位部分
+    int parity = 0;
+    for (int i = 0; i < 7; i++) {
+        if (vis_code[i] == '1') {
+            parity++;
+        }
+    }
+    int parity_bit = (parity % 2 == 0) ? 0 : 1;
+    write_tone((parity_bit == 0) ? 1300 : 1100, 30);
+
+    // 结束位
+    write_tone(1200, 30);
 }
 
 // 函数：调制结束音
@@ -172,7 +193,7 @@ void generate_end() {
         {1500, 500},{1900, 100},{1500, 100},{1900, 100},{1500, 100}
     };
     for (int i = 0; i < 5; i++) {
-        write_tone(tones[i].frequency, tones[i].duration_ms, 0);
+        write_tone(tones[i].frequency, tones[i].duration_ms);
     }
 }
 
@@ -180,33 +201,33 @@ void generate_end() {
 void generate_scottie_dx() {
     
     // 起始同步脉冲，仅第一行
-    write_tone(1200, 9, 0);
+    write_tone(1200, 9);
 
     // 图像数据部分
     for(int line = 0; line < 256; line++) {
         // 分离脉冲
-        write_tone(1500, 1.5, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+        write_tone(1500, 1.5);
 
         // 绿色扫描
         for(int x = 0; x < 320; x++) {
-            write_tone(1500 + rgb_read_pixel("g",x,line)*COLOR_FREQ_MULT, 1.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            write_tone(1500 + rgb_read_pixel("g",x,line)*COLOR_FREQ_MULT, 1.08);
         }
 
         // 分离脉冲
-        write_tone(1500, 1.5, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+        write_tone(1500, 1.5);
 
         // 蓝色扫描
         for(int x = 0; x < 320; x++) {
-            write_tone(1500 + rgb_read_pixel("b",x,line)*COLOR_FREQ_MULT, 1.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            write_tone(1500 + rgb_read_pixel("b",x,line)*COLOR_FREQ_MULT, 1.08);
         }
 
         // 同步脉冲与同步沿
-        write_tone(1200, 9, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
-        write_tone(1500, 1.5, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+        write_tone(1200, 9);
+        write_tone(1500, 1.5);
 
         // 红色扫描
         for(int x = 0; x < 320; x++) {
-            write_tone(1500 + rgb_read_pixel("r",x,line)*COLOR_FREQ_MULT, 1.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            write_tone(1500 + rgb_read_pixel("r",x,line)*COLOR_FREQ_MULT, 1.08);
         }
     }
 }
@@ -219,32 +240,75 @@ void generate_pd_120() {
         // PD 模式一次扫描两行，由偶数行开始
         if (line % 2 == 0) {
 
-            printf("Line %d\n", line);
-
             // 长同步脉冲
-            write_tone(1200, 20, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
-
+            write_tone(1200, 20);
             // Porch 脉冲
-            write_tone(1500, 2.08, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+            write_tone(1500, 2.08);
 
             // 偶数行亮度扫描
             for(int x = 0; x < 640; x++) {
-                write_tone(1500 + rgb_read_pixel("y",x,line)*COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+                write_tone(1500 + rgb_read_pixel("y",x,line)*COLOR_FREQ_MULT, 0.19);
             }
 
             // 两行RY均值扫描
             for(int x = 0; x < 640; x++) {
-                write_tone(1500 + (rgb_read_pixel("ry",x,line) + rgb_read_pixel("ry",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+                write_tone(1500 + (rgb_read_pixel("ry",x,line) + rgb_read_pixel("ry",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.19);
             }
 
             // 两行BY均值扫描
             for(int x = 0; x < 640; x++) {
-                write_tone(1500 + (rgb_read_pixel("by",x,line) + rgb_read_pixel("by",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+                write_tone(1500 + (rgb_read_pixel("by",x,line) + rgb_read_pixel("by",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.19);
             }
 
             // 奇数行亮度扫描
             for(int x = 0; x < 640; x++) {
-                write_tone(1500 + rgb_read_pixel("y",x,line+1)*COLOR_FREQ_MULT, 0.19, sign(oldercos) * asin(olderdata) + abs(sign(oldercos) - 1) / 2 * PI);
+                write_tone(1500 + rgb_read_pixel("y",x,line+1)*COLOR_FREQ_MULT, 0.19);
+            }
+        }
+    }
+}
+
+// 函数：调制 Robot-36 图像
+void generate_Robot_36() {
+
+    for (int line = 0; line < 240; line++) {
+
+        // 同步脉冲
+        write_tone(1200, 9.0);
+        // Porch 脉冲
+        write_tone(1500, 3.0);
+
+        if (line % 2 == 0) {
+
+            // 偶数行亮度扫描
+            for(int x = 0; x < 320; x++) {
+                write_tone(1500 + rgb_read_pixel("y",x,line)*COLOR_FREQ_MULT, 0.275);
+            }
+
+            //偶数分离脉冲
+            write_tone(1500, 4.5);
+            // Porch 脉冲
+            write_tone(1900, 1.5);
+
+            // 两行RY均值扫描
+            for(int x = 0; x < 320; x++) {
+                write_tone(1500 + (rgb_read_pixel("ry",x,line) + rgb_read_pixel("ry",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.1375);
+            }
+        } else {
+
+            // 奇数行亮度扫描
+            for(int x = 0; x < 320; x++) {
+                write_tone(1500 + rgb_read_pixel("y",x,line)*COLOR_FREQ_MULT, 0.275);
+            }
+
+            //奇数分离脉冲
+            write_tone(2300, 4.5);
+            // Porch 脉冲
+            write_tone(1900, 1.5);
+
+            // 两行bY均值扫描
+            for(int x = 0; x < 320; x++) {
+                write_tone(1500 + (rgb_read_pixel("by",x,line) + rgb_read_pixel("by",x,line+1)) / 2 *COLOR_FREQ_MULT, 0.1375);
             }
         }
     }
@@ -268,19 +332,29 @@ int generate(const char *wav_filename, const char *model) {
         generate_vis("1011111");
         generate_pd_120();
         generate_end();
-    } else {
-	printf("错误的调制模式\n");
-	exit(-1);
+    } else if (strcmp(model, "Robot-36") == 0){
+        generate_vis("0001000");
+        generate_Robot_36();
+        generate_end();
+    }else {
+	    printf("错误的调制模式，请使用 .\\sstv --help 获取帮助。\n");
+	    exit(-1);
     }
 
     // 计算数据大小并写入文件头
     uint32_t data_size = total_samples * sizeof(short);
     write_wav_header(data_size);
     fclose(file);
+    printf("End.\n");
     return 0;
 }
 
 int main(int argc, char *argv[]) {
+
+    // 获取程序开始时间
+    struct timespec start_time, end_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
     int height, channels;
     const char *image_filename;
     const char *model;
@@ -288,9 +362,9 @@ int main(int argc, char *argv[]) {
     model = argv[2];
 
     // 命令行提示
-    if (argc != 3) {
+    if (argc != 3 || strcmp(argv[1], "--help") == 0) {
         printf("用法: .\\sstv.exe <image_filename> <SSTV model>\n");
-        printf("支持的SSTV模式:\n1.Scottie-DX\n2.PD-120\n");
+        printf("支持的SSTV模式:\n1.Scottie-DX\n2.PD-120\n3.Robot-36\n");
         return 1;
     }
 
@@ -310,43 +384,11 @@ int main(int argc, char *argv[]) {
 
     // 释放图像内存
     stbi_image_free((unsigned char*)pixels);
-    printf("End.\n");
+
+    // 计算并输出程序运行时间
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
+    double elapsed_time = (end_time.tv_sec - start_time.tv_sec) + (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
+    printf("程序运行时间: %lf 秒\n", elapsed_time);
+
     return result;
 }
-
-/*
-
-所有标准 SSTV 模式在开始前都使用一个独特的数字代码来向接收系统标识该模式。
-该代码称为 VIS，即垂直间隔信号代码（Vertical Interval Signal code）。
-虽然整个校准头通常被称为“VIS 代码”，但代码本身只是其中的一部分。
-
-VIS码共13位，格式如下：
-
-时长（ms）    频率（hz）     类型
-----------------------------------
-300           1900          引导音
-10            1200          中断
-300           1900          引导音
-30            1200          VIS起始位
-30            bit0          1100Hz=1, 1300Hz=0
-30            bit1          ""
-30            bit2          ""
-30            bit3          ""
-30            bit4          ""
-30            bit5          ""
-30            bit6          ""
-30            校验          偶数=1300hz, 奇数=1100hz
-30            1200          VIS结束位
-
-注意：
-VIS 代码为小端序，调制时应从最低位开始。
-校验模式为偶校验，即前7位中1的个数应为偶数。
-VIS 代码结束后，不管是什么 SSTV 模式，其信号都应紧跟着开始传输。
-
--------------------------------------------------------------------
-
-各个调制模式的VIS编码：
-
-Scottie DX:  1001100 (76 d)
-PD-120:      1011111 (95 d)
-*/

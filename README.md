@@ -5,15 +5,18 @@
 目前支持的模式：  
 1. Scottie-DX
 2. PD-120
+3. Robot-36
 
 计划支持的模式：  
 1. PD-240
-2. Robot-36
-3. Robot-72
+2. Robot-72
 
 ## 编译
 ```
-~ $ gcc sstv.c -o sstv -lm -I./include
+gcc sstv.c -o sstv -lm -I./include
+```
+```
+gcc sstv.c -o sstv -lm -lasound
 ```
 ## 运行
 使用命令行参数指定输入文件和调制模式，例如：  
