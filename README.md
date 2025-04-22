@@ -4,7 +4,9 @@
 
 ## 目录  
 
-- 暂未更新
+- SSTV_Modulator.c
+- WAV_Encapsulation.c
+- test.png
 
 ## 功能 
   
@@ -24,25 +26,22 @@
 
 WAV 版本：
 ```
-gcc sstv.c -o sstv -lm -I./include
+gcc SSTV_Modulator.c WAV_Encapsulation.c -o sstv -lm -I./include
 ```
 
-ALSA 版本(通过声卡输出，仅Linux可用)：
-```
-gcc linux.c -o sstv -lm -lasound
-```
+ALSA 版本目前暂不提供。
 
 ## 用法  
 
 使用命令行参数指定输入文件和调制模式。  
 用法:  
 ```
-./sstv <'filename'> <'Modle'>
+./sstv <'Image Filename'> <'SSTV Model'> <'Output Filename'>
 ```  
 
 例如:  
 ```
-./sstv "test.png" "Robot-36"
+./sstv "test.jpg" "Robot-36" "Output.wav"
 ```  
 
 注意: 确保输入带有`-`符号的正确的调制模式名。
@@ -50,7 +49,8 @@ gcc linux.c -o sstv -lm -lasound
 ## 注意
 
 - **！！没有实现音频滤波器！！**
-- 目前仅保证支持gcc编译器
+- 目前仅保证支持 gcc 编译器
+- 尚未支持对图像大小的调整
 
 本程序未对输出的音频进行滤波，占用带宽可能过大，谨慎通过SSB模式进行传输！
 
@@ -67,6 +67,6 @@ gcc linux.c -o sstv -lm -lasound
 
 - 仓库贡献者无需对使用本内容造成的任何损失或问题负责。
 
-- 其余未说明但未尽的事项。更多信息请参见：[LICENSE](https://github.com/HyacinthSat/AX.25/blob/main/LICENSE)
+- 其余未说明但未尽的事项。更多信息请参见：[LICENSE](https://github.com/HyacinthSat/SSTV/blob/main/LICENSE)
 
 **注意**：该许可证条款仅应用于本项目组所著之内容（除特有说明外），在其之外的各类内容均遵循源许可证或版权要求。
