@@ -46,8 +46,8 @@ int Generate_PD_120();
 int main(int argc, char *argv[]) {
 
     // 命令行提示
-    if (argc != 4 || strcmp(argv[1], "--help") == 0) {
-        printf("用法: ./sstv <Image Filename> <SSTV Model> <Output File>\n");
+    if (argc != 4 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) {
+        printf("用法: ./sstv <'Image Filename'> <'SSTV Model'> <'Output Filename'>\n");
         printf("例如: ./sstv 'test.jpg' 'Robot-36' 'Output.wav'\n");
         printf("支持的SSTV模式:\n 1.Scottie-DX\n 2.PD-120\n 3.Robot-36\n");
         printf("注意: 确保输入带有连字符的正确的调制模式名。\n");
@@ -66,7 +66,7 @@ int Preprocessing(char *image, char *model) {
     // 读取图像
     pixels = stbi_load(image, &width, &height, &channels, 3);
     if (!pixels) {
-        printf("图像文件加载失败。\n");
+        printf("图像文件加载失败，请检查图像是否存在。\n");
         return -1;
     }
 
